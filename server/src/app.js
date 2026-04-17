@@ -10,12 +10,37 @@ const { globalLimiter } = require('./middleware/rateLimit.middleware');
 
 const app = express();
 
-const allowedOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowAnyOrigin = allowedOrigins.includes('*');
+const trustProxyConfig = process.env.TRUST_PROXY;
+
+if (typeof trustProxyConfig === 'string') {
+  if (trustProxyConfig.toLowerCase() === 'true') {
+    app.set('trust proxy', 1);
+  } else if (trustProxyConfig.toLowerCase() === 'false') {
+    app.set('trust proxy', false);
+  } else {
+    app.set('trust proxy', trustProxyConfig);
+  }
+} else if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
 
 app.use(helmet());
 app.use(
   cors({
-    origin: allowedOrigin,
+    origin(origin, callback) {
+      if (!origin || allowAnyOrigin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(null, false);
+    },
+    credentials: true,
   })
 );
 app.use(globalLimiter);

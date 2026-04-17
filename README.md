@@ -21,10 +21,11 @@ Create `server/.env`:
 
 ```env
 CLAUDE_API_KEY=sk-ant-...
-CLAUDE_MODEL=claude-3-5-sonnet-latest
+CLAUDE_MODEL=claude-sonnet-4-6
 JWT_SECRET=your-random-secret
 PORT=3001
 CLIENT_ORIGIN=http://localhost:5173
+TRUST_PROXY=true
 ```
 
 ## Run Locally

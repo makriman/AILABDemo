@@ -1,6 +1,12 @@
 const axios = require('axios');
 const { buildSystemPrompt, buildUserPrompt } = require('../utils/prompt');
 
+const DEFAULT_MODEL_CANDIDATES = [
+  'claude-sonnet-4-6',
+  'claude-sonnet-4-20250514',
+  'claude-3-haiku-20240307',
+];
+
 class ClaudeServiceError extends Error {
   constructor(message, statusCode = 500, retryable = false) {
     super(message);
@@ -158,7 +164,18 @@ function validateAndNormalizeQuizPayload(payload) {
   };
 }
 
-async function callClaude(jobDescription, strictMode = false) {
+function getModelCandidates() {
+  const rawCandidates = `${process.env.CLAUDE_MODELS || ''},${process.env.CLAUDE_MODEL || ''}`;
+
+  const envCandidates = rawCandidates
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return [...new Set([...envCandidates, ...DEFAULT_MODEL_CANDIDATES])];
+}
+
+async function callClaude(jobDescription, strictMode = false, model) {
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) {
     throw new ClaudeServiceError('CLAUDE_API_KEY is missing on the server.', 500, false);
@@ -168,7 +185,7 @@ async function callClaude(jobDescription, strictMode = false) {
     const response = await axios.post(
       'https://api.anthropic.com/v1/messages',
       {
-        model: process.env.CLAUDE_MODEL || 'claude-3-5-sonnet-latest',
+        model,
         max_tokens: 4000,
         temperature: 0.2,
         system: buildSystemPrompt(),
@@ -191,12 +208,26 @@ async function callClaude(jobDescription, strictMode = false) {
 
     return response.data;
   } catch (error) {
+    if (error.response?.status === 404 && error.response?.data?.error?.type === 'not_found_error') {
+      const modelError = new ClaudeServiceError(`Claude model '${model}' is unavailable.`, 500, false);
+      modelError.code = 'MODEL_UNAVAILABLE';
+      throw modelError;
+    }
+
     if (error.response?.status === 429) {
       throw new ClaudeServiceError('Claude API rate limit exceeded.', 429, false);
     }
 
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      throw new ClaudeServiceError('Claude API authentication failed.', 500, false);
+    }
+
     if (error.code === 'ECONNABORTED') {
       throw new ClaudeServiceError('Claude API request timed out.', 500, true);
+    }
+
+    if (error.response?.status && error.response.status >= 500) {
+      throw new ClaudeServiceError('Claude API is temporarily unavailable.', 500, true);
     }
 
     if (error instanceof ClaudeServiceError) {
@@ -209,29 +240,41 @@ async function callClaude(jobDescription, strictMode = false) {
 
 async function generateQuizFromJobDescription(jobDescription) {
   let lastError;
+  const modelCandidates = getModelCandidates();
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    const strictMode = attempt === 1;
+  for (const model of modelCandidates) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const strictMode = attempt === 1;
 
-    try {
-      const rawResponse = await callClaude(jobDescription, strictMode);
-      const text = extractTextFromClaudeResponse(rawResponse);
-      const json = parseJsonFromText(text);
-      return validateAndNormalizeQuizPayload(json);
-    } catch (error) {
-      if (error instanceof ClaudeServiceError && error.statusCode === 429) {
-        throw error;
-      }
+      try {
+        const rawResponse = await callClaude(jobDescription, strictMode, model);
+        const text = extractTextFromClaudeResponse(rawResponse);
+        const json = parseJsonFromText(text);
+        return validateAndNormalizeQuizPayload(json);
+      } catch (error) {
+        if (error instanceof ClaudeServiceError && error.statusCode === 429) {
+          throw error;
+        }
 
-      lastError =
-        error instanceof ClaudeServiceError
-          ? error
-          : new ClaudeServiceError('Unexpected quiz generation error.', 500, true);
+        lastError =
+          error instanceof ClaudeServiceError
+            ? error
+            : new ClaudeServiceError('Unexpected quiz generation error.', 500, true);
 
-      if (!lastError.retryable) {
-        break;
+        if (lastError.code === 'MODEL_UNAVAILABLE') {
+          // Try the next candidate model.
+          break;
+        }
+
+        if (!lastError.retryable) {
+          break;
+        }
       }
     }
+  }
+
+  if (lastError && lastError.code === 'MODEL_UNAVAILABLE') {
+    throw new ClaudeServiceError('Failed to generate quiz. Claude model is unavailable.', 500, false);
   }
 
   if (lastError && lastError.statusCode === 429) {
