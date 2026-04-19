@@ -2,6 +2,15 @@ const quizService = require('../services/quiz.service');
 
 function handleError(res, error) {
   const status = error.statusCode || 500;
+
+  if (status >= 500) {
+    // eslint-disable-next-line no-console
+    console.error('Quiz controller error:', {
+      message: error.message,
+      stack: error.stack,
+    });
+  }
+
   return res.status(status).json({
     error: error.message || 'Something went wrong.',
   });

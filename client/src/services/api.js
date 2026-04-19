@@ -62,7 +62,8 @@ export async function verifyResetPassword(payload) {
 }
 
 export async function createQuiz(jobDescription) {
-  const { data } = await api.post('/quizzes', { jobDescription });
+  // Quiz generation can take longer when backend retries Claude on malformed/timeout responses.
+  const { data } = await api.post('/quizzes', { jobDescription }, { timeout: 70000 });
   return data;
 }
 
