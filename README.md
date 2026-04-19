@@ -24,6 +24,7 @@ CLAUDE_API_KEY=sk-ant-...
 CLAUDE_MODEL=claude-sonnet-4-6
 JWT_SECRET=your-random-secret
 PORT=3001
+HOST=127.0.0.1
 CLIENT_ORIGIN=http://localhost:5173
 TRUST_PROXY=true
 ```
