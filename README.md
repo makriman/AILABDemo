@@ -48,6 +48,54 @@ cd client && npm run dev
 
 Frontend runs on `http://localhost:5173` and proxies `/api` to backend on `http://localhost:3001`.
 
+## Dockerize Server (Port 3001)
+
+Prerequisite: create `server/.env` first (same variables shown above).
+
+### Option 1: Docker Compose (recommended)
+
+```bash
+docker compose -f docker-compose.server.yml up -d --build
+```
+
+Check logs:
+
+```bash
+docker compose -f docker-compose.server.yml logs -f
+```
+
+Stop:
+
+```bash
+docker compose -f docker-compose.server.yml down
+```
+
+### Option 2: Plain Docker
+
+Build image:
+
+```bash
+docker build -t jd-quiz-server ./server
+```
+
+Run container:
+
+```bash
+docker run -d \
+  --name jd-quiz-server \
+  --env-file ./server/.env \
+  -e NODE_ENV=production \
+  -e HOST=0.0.0.0 \
+  -e PORT=3001 \
+  -p 3001:3001 \
+  -v "$(pwd)/server/data:/app/data" \
+  jd-quiz-server
+```
+
+The API will be reachable at `http://localhost:3001`.
+
+Note: `docker-compose.server.yml` binds `3001` to `127.0.0.1` for safer server deployments behind Nginx.
+
 ## Scripts
 
 Server:

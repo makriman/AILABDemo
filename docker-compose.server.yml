@@ -1,0 +1,17 @@
+services:
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: jd-quiz-server
+    env_file:
+      - ./server/.env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - ./server/data:/app/data
+    restart: unless-stopped
