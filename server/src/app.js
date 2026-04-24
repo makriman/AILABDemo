@@ -34,16 +34,14 @@ app.get('/health', (req, res) => {
 
 app.use('/api/quiz', quizRoutes);
 
-if (process.env.NODE_ENV === 'production') {
-  const clientDistPath = path.resolve(__dirname, '../../client/dist');
-  const indexFile = path.join(clientDistPath, 'index.html');
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+const indexFile = path.join(clientDistPath, 'index.html');
 
-  if (fs.existsSync(clientDistPath) && fs.existsSync(indexFile)) {
-    app.use(express.static(clientDistPath));
-    app.get(/^\/(?!api|health).*/, (req, res) => {
-      res.sendFile(indexFile);
-    });
-  }
+if (fs.existsSync(clientDistPath) && fs.existsSync(indexFile)) {
+  app.use(express.static(clientDistPath));
+  app.get(/^\/(?!api|health).*/, (req, res) => {
+    res.sendFile(indexFile);
+  });
 }
 
 app.use('/api', (req, res) => {
