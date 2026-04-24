@@ -7,7 +7,7 @@ function handleError(res, error) {
     // eslint-disable-next-line no-console
     console.error('Quiz controller error:', {
       message: error.message,
-      stack: error.stack,
+      status,
     });
   }
 
@@ -16,28 +16,10 @@ function handleError(res, error) {
   });
 }
 
-async function createQuiz(req, res) {
+async function generateQuiz(req, res) {
   try {
-    const quiz = await quizService.createQuizForUser(req.user.userId, req.body.jobDescription);
-    return res.status(201).json(quiz);
-  } catch (error) {
-    return handleError(res, error);
-  }
-}
-
-async function listQuizzes(req, res) {
-  try {
-    const quizzes = await quizService.listQuizzesForUser(req.user.userId);
-    return res.status(200).json({ quizzes });
-  } catch (error) {
-    return handleError(res, error);
-  }
-}
-
-async function getQuizById(req, res) {
-  try {
-    const quiz = await quizService.getQuizByIdForUser(req.user.userId, req.params.quizId);
-    return res.status(200).json(quiz);
+    const response = await quizService.generateQuiz(req.body.jobDescription);
+    return res.status(200).json(response);
   } catch (error) {
     return handleError(res, error);
   }
@@ -45,21 +27,14 @@ async function getQuizById(req, res) {
 
 async function submitQuiz(req, res) {
   try {
-    const result = await quizService.submitQuizForUser(
-      req.user.userId,
-      req.params.quizId,
-      req.body.answers
-    );
-
-    return res.status(200).json(result);
+    const response = await quizService.submitQuiz(req.body.attemptToken, req.body.answers);
+    return res.status(200).json(response);
   } catch (error) {
     return handleError(res, error);
   }
 }
 
 module.exports = {
-  createQuiz,
-  listQuizzes,
-  getQuizById,
+  generateQuiz,
   submitQuiz,
 };

@@ -5,8 +5,9 @@ import Card from '../components/common/Card';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import TextArea from '../components/common/TextArea';
 import PageContainer from '../components/layout/PageContainer';
+import { useQuizSession } from '../context/QuizSessionContext';
 import { useToast } from '../context/ToastContext';
-import { createQuiz } from '../services/api';
+import { generateQuiz } from '../services/api';
 import { parseApiError } from '../utils/helpers';
 
 const JD_MIN = 50;
@@ -15,6 +16,7 @@ const JD_MAX = 15000;
 export default function NewQuizPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { startSession } = useQuizSession();
   const [jobDescription, setJobDescription] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,15 +45,17 @@ export default function NewQuizPage() {
 
   async function handleSubmit(event) {
     event.preventDefault();
+
     if (!validate()) {
       return;
     }
 
     setLoading(true);
     try {
-      const quiz = await createQuiz(jobDescription);
-      showToast('Quiz generated successfully.', 'success');
-      navigate(`/quiz/${quiz.quizId}`);
+      const payload = await generateQuiz(jobDescription);
+      startSession(payload);
+      showToast('Temporary quiz generated. Complete it before this tab is refreshed.', 'success');
+      navigate('/quiz');
     } catch (apiError) {
       showToast(
         parseApiError(apiError, 'Something went wrong generating your quiz. Please try again.'),
@@ -65,7 +69,7 @@ export default function NewQuizPage() {
   if (loading) {
     return (
       <PageContainer>
-        <LoadingSpinner message="Generating your quiz..." />
+        <LoadingSpinner message="Generating your temporary quiz..." />
       </PageContainer>
     );
   }
@@ -73,8 +77,10 @@ export default function NewQuizPage() {
   return (
     <PageContainer>
       <Card>
-        <h1>New Quiz</h1>
-        <p className="subtle">Paste a job description to generate five interview-prep questions.</p>
+        <h1>Generate a Temporary Quiz</h1>
+        <p className="subtle">
+          Paste a job description to generate five questions. This session is temporary and is lost on refresh.
+        </p>
         <form className="form" onSubmit={handleSubmit}>
           <TextArea
             id="jobDescription"

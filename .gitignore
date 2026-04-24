@@ -8,17 +8,15 @@ yarn-error.log*
 
 # env
 .env
+.env.*
 server/.env
 client/.env
 
 # build outputs
+client/dist/
 dist/
 build/
 coverage/
-
-# data
-server/data/*.db
-server/data/*.db~
 
 # OS / editor
 .DS_Store

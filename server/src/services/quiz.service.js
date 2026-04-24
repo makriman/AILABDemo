@@ -1,12 +1,14 @@
-const quizModel = require('../models/quiz.model');
 const { sanitizeString } = require('../utils/sanitizers');
+const { generateQuizFromJobDescription, ClaudeServiceError } = require('./claude.service');
 const {
-  generateQuizFromJobDescription,
-  ClaudeServiceError,
-} = require('./claude.service');
+  createAttemptToken,
+  decryptAttemptToken,
+  QuizSessionError,
+} = require('./quizSession.service');
 
 const JD_MIN_LENGTH = 50;
 const JD_MAX_LENGTH = 15000;
+const VALID_OPTIONS = new Set(['A', 'B', 'C', 'D']);
 
 function createHttpError(message, statusCode) {
   const error = new Error(message);
@@ -22,7 +24,7 @@ function normalizeJobDescription(input) {
   }
 
   if (clean.length < JD_MIN_LENGTH) {
-    throw createHttpError('Job description must be at least 50 characters long.', 400);
+    throw createHttpError(`Job description must be at least ${JD_MIN_LENGTH} characters long.`, 400);
   }
 
   return clean.slice(0, JD_MAX_LENGTH);
@@ -41,11 +43,12 @@ function inferJobTitleFromText(jobDescription) {
   return firstNonEmptyLine.slice(0, 120);
 }
 
-function mapQuizForCreationResponse(quiz) {
+function toPublicQuiz(generatedQuiz, fallbackJobTitle) {
+  const jobTitle = generatedQuiz.jobTitle || fallbackJobTitle;
+
   return {
-    quizId: quiz._id,
-    jobTitle: quiz.jobTitle,
-    questions: quiz.questions.map((question) => ({
+    jobTitle,
+    questions: generatedQuiz.questions.map((question) => ({
       questionId: question.questionId,
       questionText: question.questionText,
       options: question.options,
@@ -53,50 +56,18 @@ function mapQuizForCreationResponse(quiz) {
   };
 }
 
-function mapQuizForFetchResponse(quiz, result) {
-  const base = {
-    quizId: quiz._id,
-    jobTitle: quiz.jobTitle,
-    jobDescription: quiz.jobDescription,
-    createdAt: quiz.createdAt,
-  };
-
-  if (!result) {
-    return {
-      ...base,
-      questions: quiz.questions.map((question) => ({
-        questionId: question.questionId,
-        questionText: question.questionText,
-        options: question.options,
-      })),
-      result: null,
-    };
-  }
-
-  return {
-    ...base,
-    questions: quiz.questions,
-    learningSummary: quiz.learningSummary,
-    result: {
-      answers: result.answers,
-      score: result.score,
-      completedAt: result.completedAt,
-    },
-  };
-}
-
-function validateSubmissionAnswers(quiz, answers) {
-  if (!Array.isArray(answers) || answers.length !== 5) {
-    throw createHttpError('Missing answers, wrong number of answers, or invalid format.', 400);
+function validateSubmissionAnswers(questions, answers) {
+  if (!Array.isArray(answers) || answers.length !== questions.length) {
+    throw createHttpError('All questions must be answered before submitting.', 400);
   }
 
   const answerMap = new Map();
 
   for (const answer of answers) {
-    const questionId = sanitizeString(answer.questionId, 20);
-    const selectedAnswer = sanitizeString(answer.selectedAnswer, 1).toUpperCase();
+    const questionId = sanitizeString(answer?.questionId || '', 20);
+    const selectedAnswer = sanitizeString(answer?.selectedAnswer || '', 1).toUpperCase();
 
-    if (!questionId || !['A', 'B', 'C', 'D'].includes(selectedAnswer)) {
+    if (!questionId || !VALID_OPTIONS.has(selectedAnswer)) {
       throw createHttpError('Missing answers, wrong number of answers, or invalid format.', 400);
     }
 
@@ -107,47 +78,45 @@ function validateSubmissionAnswers(quiz, answers) {
     answerMap.set(questionId, selectedAnswer);
   }
 
-  for (const question of quiz.questions) {
+  for (const question of questions) {
     if (!answerMap.has(question.questionId)) {
-      throw createHttpError('All 5 questions must be answered before submitting.', 400);
+      throw createHttpError('All questions must be answered before submitting.', 400);
     }
   }
 
   return answerMap;
 }
 
-function scoreQuiz(quiz, answerMap) {
-  const results = quiz.questions.map((question) => {
+function scoreQuiz(quizPayload, answerMap) {
+  const results = quizPayload.questions.map((question) => {
     const selectedAnswer = answerMap.get(question.questionId);
     const isCorrect = selectedAnswer === question.correctAnswer;
 
     return {
       questionId: question.questionId,
       questionText: question.questionText,
+      options: question.options,
       selectedAnswer,
       correctAnswer: question.correctAnswer,
       isCorrect,
       explanation: question.explanation,
-      wrongExplanation: isCorrect ? null : question.wrongExplanations[selectedAnswer] || null,
+      wrongExplanation: isCorrect ? null : question.wrongExplanations?.[selectedAnswer] || null,
     };
   });
 
   const score = results.filter((result) => result.isCorrect).length;
 
-  return { score, results };
+  return {
+    jobTitle: quizPayload.jobTitle,
+    score,
+    totalQuestions: quizPayload.questions.length,
+    results,
+    learningSummary: quizPayload.learningSummary,
+  };
 }
 
-function buildStoredAnswers(results) {
-  return results.map((result) => ({
-    questionId: result.questionId,
-    selectedAnswer: result.selectedAnswer,
-    isCorrect: result.isCorrect,
-  }));
-}
-
-async function createQuizForUser(userId, jobDescriptionInput) {
+async function generateQuiz(jobDescriptionInput) {
   const jobDescription = normalizeJobDescription(jobDescriptionInput);
-  const createdAt = new Date().toISOString();
 
   let generatedQuiz;
   try {
@@ -160,91 +129,42 @@ async function createQuizForUser(userId, jobDescriptionInput) {
     throw createHttpError('Failed to generate quiz. Please try again.', 500);
   }
 
-  const jobTitle = generatedQuiz.jobTitle || inferJobTitleFromText(jobDescription);
+  const fallbackJobTitle = inferJobTitleFromText(jobDescription);
+  const quiz = toPublicQuiz(generatedQuiz, fallbackJobTitle);
 
-  const quiz = await quizModel.createQuiz({
-    userId,
-    jobDescription,
-    jobTitle,
+  const { attemptToken, expiresAt } = createAttemptToken({
+    jobTitle: quiz.jobTitle,
     questions: generatedQuiz.questions,
     learningSummary: generatedQuiz.learningSummary,
-    createdAt,
-  });
-
-  return mapQuizForCreationResponse(quiz);
-}
-
-async function listQuizzesForUser(userId) {
-  const [quizzes, results] = await Promise.all([
-    quizModel.findQuizzesByUserId(userId),
-    quizModel.findResultsByUserId(userId),
-  ]);
-
-  const scoreByQuizId = new Map(results.map((result) => [result.quizId, result.score]));
-
-  return quizzes.map((quiz) => ({
-    quizId: quiz._id,
-    jobTitle: quiz.jobTitle,
-    score: scoreByQuizId.has(quiz._id) ? scoreByQuizId.get(quiz._id) : null,
-    createdAt: quiz.createdAt,
-  }));
-}
-
-async function getQuizByIdForUser(userId, quizId) {
-  const quiz = await quizModel.findQuizById(quizId);
-
-  if (!quiz) {
-    throw createHttpError('Quiz not found.', 404);
-  }
-
-  if (quiz.userId !== userId) {
-    throw createHttpError('Forbidden.', 403);
-  }
-
-  const result = await quizModel.findResultByQuizId(quizId);
-  return mapQuizForFetchResponse(quiz, result);
-}
-
-async function submitQuizForUser(userId, quizId, answers) {
-  const quiz = await quizModel.findQuizById(quizId);
-
-  if (!quiz) {
-    throw createHttpError('Quiz not found.', 404);
-  }
-
-  if (quiz.userId !== userId) {
-    throw createHttpError('Forbidden.', 403);
-  }
-
-  const existingResult = await quizModel.findResultByQuizId(quizId);
-  if (existingResult) {
-    throw createHttpError('Quiz already submitted.', 409);
-  }
-
-  const answerMap = validateSubmissionAnswers(quiz, answers);
-  const { score, results } = scoreQuiz(quiz, answerMap);
-
-  const completedAt = new Date().toISOString();
-  await quizModel.createResult({
-    quizId,
-    userId,
-    answers: buildStoredAnswers(results),
-    score,
-    completedAt,
   });
 
   return {
-    score,
-    results,
-    learningSummary: quiz.learningSummary,
+    quiz,
+    attemptToken,
+    expiresAt,
   };
 }
 
+async function submitQuiz(attemptToken, answers) {
+  let payload;
+  try {
+    payload = decryptAttemptToken(attemptToken);
+  } catch (error) {
+    if (error instanceof QuizSessionError) {
+      throw createHttpError(error.message, error.statusCode);
+    }
+
+    throw createHttpError('Invalid token.', 400);
+  }
+
+  const answerMap = validateSubmissionAnswers(payload.questions, answers);
+  return scoreQuiz(payload, answerMap);
+}
+
 module.exports = {
-  createQuizForUser,
-  listQuizzesForUser,
-  getQuizByIdForUser,
-  submitQuizForUser,
-  scoreQuiz,
+  generateQuiz,
+  submitQuiz,
   validateSubmissionAnswers,
+  scoreQuiz,
+  normalizeJobDescription,
 };

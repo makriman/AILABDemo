@@ -1,132 +1,159 @@
-# Job Description Quiz App
+# JD Quiz App (Stateless Render MVP)
 
-A local-first full-stack app for generating and taking 5-question MCQ quizzes from job descriptions.
+A temporary job-description quiz tool built for a single Render Web Service.
 
-## Tech Stack
+## Product Behavior
 
-- Frontend: React + Vite + React Router + Axios
-- Backend: Node.js + Express
-- Database: NeDB (`nedb-promises`)
-- Auth: JWT + bcrypt
-- AI: Anthropic Claude Messages API
+- No accounts
+- No database
+- No saved quiz history
+- No persistent storage
+- Generate quiz -> answer 5 questions -> submit -> see feedback
+- Refresh/restart clears the in-memory session
 
-## Project Structure
+## Architecture
 
-- `client/` - React app
-- `server/` - Express API
+- `client/`: React + Vite
+- `server/`: Express API + Claude integration
+- Production: one Node service
+  - Express serves `/api/*`
+  - Express serves built Vite app from `client/dist`
+  - Same-origin frontend + backend
 
 ## Environment Variables
 
-Create `server/.env`:
+Set these in Render (and optionally local `.env`):
 
 ```env
 CLAUDE_API_KEY=sk-ant-...
 CLAUDE_MODEL=claude-sonnet-4-6
-JWT_SECRET=your-random-secret
-PORT=3001
-HOST=127.0.0.1
-CLIENT_ORIGIN=http://localhost:5173
+QUIZ_STATE_SECRET=your-long-random-secret
+PORT=10000
+NODE_ENV=production
 TRUST_PROXY=true
 ```
 
-## Run Locally
+Notes:
+- `QUIZ_STATE_SECRET` is required for encrypted attempt tokens.
+- `PORT` is provided automatically by Render.
+
+## Local Development
+
+From repo root:
 
 ```bash
-cd server && npm install
-cd ../client && npm install
+npm install
+npm run dev
 ```
 
-In two terminals:
+This runs:
+- Express on `http://localhost:3001`
+- Vite on `http://localhost:5173` (proxying `/api` to Express)
+
+## Production Run (Local Smoke)
+
+From repo root:
 
 ```bash
-cd server && npm run dev
+npm run build
+npm start
 ```
 
-```bash
-cd client && npm run dev
+Then verify:
+- `GET /health` -> `200`
+- `GET /` -> frontend app
+- quiz generate + submit flow works
+
+## API Contract
+
+### `POST /api/quiz/generate`
+
+Request:
+
+```json
+{
+  "jobDescription": "..."
+}
 ```
 
-Frontend runs on `http://localhost:5173` and proxies `/api` to backend on `http://localhost:3001`.
+Response:
 
-## Dockerize Server (Port 3001)
-
-Prerequisite: create `server/.env` first (same variables shown above).
-
-### Option 1: Docker Compose (recommended)
-
-Build frontend once before starting compose (needed for `ailab_frontend` static files):
-
-```bash
-cd client && npm install && npm run build && cd ..
+```json
+{
+  "quiz": {
+    "jobTitle": "...",
+    "questions": [
+      {
+        "questionId": "q1",
+        "questionText": "...",
+        "options": [
+          { "label": "A", "text": "..." },
+          { "label": "B", "text": "..." },
+          { "label": "C", "text": "..." },
+          { "label": "D", "text": "..." }
+        ]
+      }
+    ]
+  },
+  "attemptToken": "opaque-encrypted-token",
+  "expiresAt": "2026-04-23T12:00:00.000Z"
+}
 ```
 
-```bash
-docker compose -f docker-compose.server.yml up -d --build
+### `POST /api/quiz/submit`
+
+Request:
+
+```json
+{
+  "attemptToken": "opaque-encrypted-token",
+  "answers": [
+    { "questionId": "q1", "selectedAnswer": "A" },
+    { "questionId": "q2", "selectedAnswer": "B" },
+    { "questionId": "q3", "selectedAnswer": "C" },
+    { "questionId": "q4", "selectedAnswer": "D" },
+    { "questionId": "q5", "selectedAnswer": "A" }
+  ]
+}
 ```
 
-Check logs:
+Response:
 
-```bash
-docker compose -f docker-compose.server.yml logs -f
+```json
+{
+  "jobTitle": "...",
+  "score": 3,
+  "totalQuestions": 5,
+  "results": [
+    {
+      "questionId": "q1",
+      "questionText": "...",
+      "options": [
+        { "label": "A", "text": "..." },
+        { "label": "B", "text": "..." },
+        { "label": "C", "text": "..." },
+        { "label": "D", "text": "..." }
+      ],
+      "selectedAnswer": "A",
+      "correctAnswer": "B",
+      "isCorrect": false,
+      "explanation": "...",
+      "wrongExplanation": "..."
+    }
+  ],
+  "learningSummary": "..."
+}
 ```
 
-Stop:
+## Render Deployment
 
-```bash
-docker compose -f docker-compose.server.yml down
-```
+This repo includes `render.yaml` for a single Web Service blueprint.
 
-### Option 2: Plain Docker
+Dashboard equivalent settings:
+- Service type: Web Service
+- Runtime: Node
+- Build Command: `npm install && npm run build`
+- Start Command: `npm start`
+- Health Check Path: `/health`
 
-Build image:
-
-```bash
-docker build -t jd-quiz-server ./server
-```
-
-Run container:
-
-```bash
-docker run -d \
-  --name jd-quiz-server \
-  --env-file ./server/.env \
-  -e NODE_ENV=production \
-  -e HOST=0.0.0.0 \
-  -e PORT=3001 \
-  -p 3001:3001 \
-  -v "$(pwd)/server/data:/app/data" \
-  jd-quiz-server
-```
-
-The API will be reachable at `http://localhost:3001`.
-
-Note: `docker-compose.server.yml` binds `3001` to `127.0.0.1` for safer server deployments behind Nginx and expects a shared proxy network named `loan-rating_default`.
-
-## Scripts
-
-Server:
-
-- `npm run dev`
-- `npm run start`
-- `npm run test`
-
-Client:
-
-- `npm run dev`
-- `npm run build`
-- `npm run preview`
-- `npm run test`
-
-## Security/Validation Included
-
-- bcrypt hashing for passwords + security answers
-- JWT protected quiz routes
-- Sanitization + Joi validation
-- Helmet + CORS + rate limiting
-- Quiz ownership checks (403 on cross-user access)
-
-## Notes
-
-- Quiz generation returns only question text/options initially.
-- Correct answers and explanations are exposed only after submission.
-- Claude output is schema-validated with one retry on malformed output/timeout.
+No DB, Redis, or persistent disk required.

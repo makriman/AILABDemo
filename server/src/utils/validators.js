@@ -1,55 +1,41 @@
 const Joi = require('joi');
 
-const usernamePattern = /^[A-Za-z0-9_]{3,30}$/;
-
-const signupSchema = Joi.object({
-  username: Joi.string().pattern(usernamePattern).required().messages({
-    'string.pattern.base': 'Username must be 3-30 chars and contain only letters, numbers, and underscores.',
-  }),
-  password: Joi.string().min(8).required(),
-  securityQuestion: Joi.string().min(1).max(300).required(),
-  securityAnswer: Joi.string().min(1).max(300).required(),
-});
-
-const loginSchema = Joi.object({
-  username: Joi.string().required(),
-  password: Joi.string().required(),
-});
-
-const resetPasswordQuestionSchema = Joi.object({
-  username: Joi.string().required(),
-});
-
-const resetPasswordVerifySchema = Joi.object({
-  username: Joi.string().required(),
-  securityAnswer: Joi.string().required(),
-  newPassword: Joi.string().min(8).required(),
-});
-
-const createQuizSchema = Joi.object({
-  jobDescription: Joi.string().min(50).max(15000).required().messages({
+const generateQuizSchema = Joi.object({
+  jobDescription: Joi.string().trim().min(50).max(15000).required().messages({
+    'string.empty': 'Please paste a job description before submitting.',
     'string.min': 'Job description must be at least 50 characters long.',
     'string.max': 'Job description must be no more than 15000 characters long.',
   }),
 });
 
 const submitQuizSchema = Joi.object({
+  attemptToken: Joi.string().trim().required().messages({
+    'string.empty': 'attemptToken is required.',
+    'any.required': 'attemptToken is required.',
+  }),
   answers: Joi.array()
     .items(
       Joi.object({
-        questionId: Joi.string().required(),
-        selectedAnswer: Joi.string().valid('A', 'B', 'C', 'D').required(),
+        questionId: Joi.string().trim().required(),
+        selectedAnswer: Joi.string().uppercase().valid('A', 'B', 'C', 'D').required(),
       })
     )
     .length(5)
-    .required(),
+    .required()
+    .custom((answers, helpers) => {
+      const ids = answers.map((answer) => answer.questionId);
+      if (new Set(ids).size !== ids.length) {
+        return helpers.error('any.invalid');
+      }
+      return answers;
+    }, 'unique question ids')
+    .messages({
+      'array.length': 'All 5 questions must be answered before submitting.',
+      'any.invalid': 'Each question must be answered once.',
+    }),
 });
 
 module.exports = {
-  signupSchema,
-  loginSchema,
-  resetPasswordQuestionSchema,
-  resetPasswordVerifySchema,
-  createQuizSchema,
+  generateQuizSchema,
   submitQuizSchema,
 };

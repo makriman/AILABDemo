@@ -1,38 +1,35 @@
 import { Link, useNavigate } from 'react-router-dom';
-import useAuth from '../../hooks/useAuth';
+import { useQuizSession } from '../../context/QuizSessionContext';
 import Button from '../common/Button';
 
 export default function Header() {
-  const { isAuthenticated, user, logout } = useAuth();
   const navigate = useNavigate();
+  const { quiz, attemptToken, result, answers, clearSession } = useQuizSession();
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  const hasSession =
+    Boolean(quiz) ||
+    Boolean(attemptToken) ||
+    Boolean(result) ||
+    Object.keys(answers || {}).length > 0;
 
   return (
     <header className="app-header">
       <div className="app-header-inner">
-        <Link to="/dashboard" className="brand">
+        <Link to="/" className="brand">
           JD Quiz
         </Link>
-        <nav className="nav-links" aria-label="Main navigation">
-          <Link to="/dashboard">Dashboard</Link>
-          <Link to="/quiz/new">New Quiz</Link>
-          <Link to="/history">History</Link>
-        </nav>
-        <div className="header-user">
-          <span className="field-caption">@{user?.username}</span>
+
+        {hasSession ? (
           <Button
             variant="secondary"
             onClick={() => {
-              logout();
-              navigate('/login');
+              clearSession();
+              navigate('/');
             }}
           >
-            Logout
+            Start over
           </Button>
-        </div>
+        ) : null}
       </div>
     </header>
   );

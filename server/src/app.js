@@ -1,21 +1,14 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
-const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
-const authRoutes = require('./routes/auth.routes');
 const quizRoutes = require('./routes/quiz.routes');
-const authMiddleware = require('./middleware/auth.middleware');
 const { globalLimiter } = require('./middleware/rateLimit.middleware');
 
 const app = express();
 
-const allowedOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-const allowAnyOrigin = allowedOrigins.includes('*');
 const trustProxyConfig = process.env.TRUST_PROXY;
 
 if (typeof trustProxyConfig === 'string') {
@@ -31,28 +24,31 @@ if (typeof trustProxyConfig === 'string') {
 }
 
 app.use(helmet());
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin || allowAnyOrigin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      return callback(null, false);
-    },
-    credentials: true,
-  })
-);
 app.use(globalLimiter);
 app.use(express.json({ limit: '1mb' }));
-app.use(morgan('dev'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/quizzes', authMiddleware, quizRoutes);
+app.use('/api/quiz', quizRoutes);
+
+if (process.env.NODE_ENV === 'production') {
+  const clientDistPath = path.resolve(__dirname, '../../client/dist');
+  const indexFile = path.join(clientDistPath, 'index.html');
+
+  if (fs.existsSync(clientDistPath) && fs.existsSync(indexFile)) {
+    app.use(express.static(clientDistPath));
+    app.get(/^\/(?!api|health).*/, (req, res) => {
+      res.sendFile(indexFile);
+    });
+  }
+}
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found.' });
+});
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found.' });

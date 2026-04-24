@@ -146,7 +146,6 @@ function validateAndNormalizeQuizPayload(payload) {
     throw new ClaudeServiceError('Claude payload is invalid.', 500, true);
   }
 
-  assertNonEmptyString(payload.jobTitle, 'jobTitle');
   assertNonEmptyString(payload.learningSummary, 'learningSummary');
 
   if (!Array.isArray(payload.questions) || payload.questions.length !== 5) {
@@ -157,8 +156,14 @@ function validateAndNormalizeQuizPayload(payload) {
     validateAndNormalizeQuestion(question, index)
   );
 
+  const jobTitle = typeof payload.jobTitle === 'string' ? payload.jobTitle.trim() : '';
+
+  if (payload.jobTitle !== undefined && payload.jobTitle !== null && typeof payload.jobTitle !== 'string') {
+    throw new ClaudeServiceError('Invalid jobTitle in Claude response.', 500, true);
+  }
+
   return {
-    jobTitle: payload.jobTitle.trim(),
+    jobTitle,
     questions,
     learningSummary: payload.learningSummary.trim(),
   };

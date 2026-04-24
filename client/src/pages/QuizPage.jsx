@@ -1,79 +1,46 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Button from '../components/common/Button';
 import Card from '../components/common/Card';
-import LoadingSpinner from '../components/common/LoadingSpinner';
 import QuestionCard from '../components/quiz/QuestionCard';
 import PageContainer from '../components/layout/PageContainer';
+import { useQuizSession } from '../context/QuizSessionContext';
 import { useToast } from '../context/ToastContext';
-import { getQuiz, submitQuiz } from '../services/api';
+import { submitQuiz } from '../services/api';
 import { parseApiError } from '../utils/helpers';
 
-function storageKey(quizId) {
-  return `quiz_answers_${quizId}`;
-}
+const EXPIRED_SESSION_MESSAGE = 'This temporary quiz session has expired. Generate a new one.';
 
 export default function QuizPage() {
-  const { quizId } = useParams();
   const navigate = useNavigate();
   const { showToast } = useToast();
-
-  const [quiz, setQuiz] = useState(null);
-  const [answers, setAnswers] = useState({});
-  const [loading, setLoading] = useState(true);
+  const { quiz, attemptToken, expiresAt, answers, setAnswer, setResult, clearSession } =
+    useQuizSession();
   const [submitting, setSubmitting] = useState(false);
 
+  const sessionMissing = !quiz || !attemptToken;
+  const sessionExpired = expiresAt ? Date.now() > new Date(expiresAt).getTime() : false;
+
   useEffect(() => {
-    let mounted = true;
+    if (sessionMissing || sessionExpired) {
+      clearSession();
+      showToast(EXPIRED_SESSION_MESSAGE, 'info');
+      navigate('/', { replace: true });
+    }
+  }, [clearSession, navigate, sessionExpired, sessionMissing, showToast]);
 
-    async function loadQuiz() {
-      try {
-        const data = await getQuiz(quizId);
-
-        if (data.result) {
-          navigate(`/quiz/${quizId}/results`, { replace: true });
-          return;
-        }
-
-        if (mounted) {
-          setQuiz(data);
-          const savedAnswers = localStorage.getItem(storageKey(quizId));
-          if (savedAnswers) {
-            try {
-              setAnswers(JSON.parse(savedAnswers));
-            } catch (error) {
-              localStorage.removeItem(storageKey(quizId));
-            }
-          }
-        }
-      } catch (error) {
-        showToast(parseApiError(error, 'Unable to load quiz.'), 'error');
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
+  const allAnswered = useMemo(() => {
+    if (!quiz) {
+      return false;
     }
 
-    loadQuiz();
-
-    return () => {
-      mounted = false;
-    };
-  }, [navigate, quizId, showToast]);
-
-  function handleSelectAnswer(questionId, selectedAnswer) {
-    setAnswers((prev) => {
-      const next = { ...prev, [questionId]: selectedAnswer };
-      localStorage.setItem(storageKey(quizId), JSON.stringify(next));
-      return next;
-    });
-  }
+    return quiz.questions.every((question) => Boolean(answers[question.questionId]));
+  }, [answers, quiz]);
 
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!quiz) {
+    if (!quiz || !attemptToken || !allAnswered) {
       return;
     }
 
@@ -83,46 +50,37 @@ export default function QuizPage() {
     }));
 
     setSubmitting(true);
+
     try {
-      await submitQuiz(quizId, payload);
-      localStorage.removeItem(storageKey(quizId));
-      navigate(`/quiz/${quizId}/results`);
+      const scored = await submitQuiz(attemptToken, payload);
+      setResult(scored);
+      navigate('/results');
     } catch (error) {
-      showToast(
-        parseApiError(error, 'Unable to submit quiz. Your selections are saved, please try again.'),
-        'error'
-      );
+      if (error?.response?.status === 410) {
+        clearSession();
+        showToast(parseApiError(error, EXPIRED_SESSION_MESSAGE), 'error');
+        navigate('/', { replace: true });
+      } else {
+        showToast(
+          parseApiError(error, 'Unable to submit quiz right now. Your selections are still in memory.'),
+          'error'
+        );
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (loading) {
-    return (
-      <PageContainer>
-        <LoadingSpinner message="Loading quiz..." />
-      </PageContainer>
-    );
+  if (sessionMissing || sessionExpired || !quiz) {
+    return null;
   }
-
-  if (!quiz) {
-    return (
-      <PageContainer>
-        <Card>
-          <p>Quiz not found.</p>
-        </Card>
-      </PageContainer>
-    );
-  }
-
-  const allAnswered = quiz.questions.every((question) => Boolean(answers[question.questionId]));
 
   return (
     <PageContainer>
       <form className="stack-lg" onSubmit={handleSubmit}>
         <Card>
           <h1>{quiz.jobTitle}</h1>
-          <p className="subtle">Answer all 5 questions to submit your quiz.</p>
+          <p className="subtle">Answer all 5 questions to score this temporary quiz.</p>
         </Card>
 
         {quiz.questions.map((question) => (
@@ -130,12 +88,12 @@ export default function QuizPage() {
             key={question.questionId}
             question={question}
             selectedAnswer={answers[question.questionId]}
-            onSelectAnswer={handleSelectAnswer}
+            onSelectAnswer={setAnswer}
           />
         ))}
 
         <Button type="submit" loading={submitting} disabled={!allAnswered}>
-          Submit Quiz
+          Submit quiz
         </Button>
       </form>
     </PageContainer>

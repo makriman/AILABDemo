@@ -100,4 +100,13 @@ ${JSON.stringify(validPayload)}\nDone.`;
     expect(normalized.questions[0].questionId).toBe('q1');
     expect(normalized.questions[2].correctAnswer).toBe('C');
   });
+
+  test('validateAndNormalizeQuizPayload allows missing jobTitle for service fallback', () => {
+    const withoutTitle = { ...validPayload };
+    delete withoutTitle.jobTitle;
+
+    const normalized = validateAndNormalizeQuizPayload(withoutTitle);
+    expect(normalized.jobTitle).toBe('');
+    expect(normalized.questions).toHaveLength(5);
+  });
 });

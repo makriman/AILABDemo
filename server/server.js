@@ -1,18 +1,29 @@
 require('dotenv').config();
 
 const app = require('./src/app');
-const { initDb } = require('./src/config/db');
 
-const PORT = process.env.PORT || 3001;
-const HOST =
-  process.env.HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0');
+const isProduction = process.env.NODE_ENV === 'production';
+const PORT = Number(process.env.PORT) || 10000;
+const HOST = isProduction ? '0.0.0.0' : process.env.HOST || '0.0.0.0';
 
-async function startServer() {
-  if (!process.env.JWT_SECRET) {
-    throw new Error('JWT_SECRET is required.');
+function validateEnvironment() {
+  const required = [];
+
+  if (isProduction) {
+    required.push('CLAUDE_API_KEY');
   }
 
-  await initDb();
+  required.push('QUIZ_STATE_SECRET');
+
+  const missing = required.filter((name) => !process.env[name]);
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+}
+
+function startServer() {
+  validateEnvironment();
 
   app.listen(PORT, HOST, () => {
     // eslint-disable-next-line no-console
@@ -20,8 +31,10 @@ async function startServer() {
   });
 }
 
-startServer().catch((error) => {
+try {
+  startServer();
+} catch (error) {
   // eslint-disable-next-line no-console
   console.error('Failed to start server:', error.message);
   process.exit(1);
-});
+}

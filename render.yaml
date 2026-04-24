@@ -1,0 +1,17 @@
+services:
+  - type: web
+    runtime: node
+    name: jd-quiz-app
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLAUDE_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-sonnet-4-6
+      - key: QUIZ_STATE_SECRET
+        generateValue: true
