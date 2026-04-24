@@ -34,14 +34,31 @@ app.get('/health', (req, res) => {
 
 app.use('/api/quiz', quizRoutes);
 
-const clientDistPath = path.resolve(__dirname, '../../client/dist');
-const indexFile = path.join(clientDistPath, 'index.html');
+const clientDistCandidates = [
+  path.resolve(__dirname, '../../client/dist'),
+  path.resolve(__dirname, '../../../client/dist'),
+  path.resolve(__dirname, '../../../dist'),
+  path.resolve(process.cwd(), '../client/dist'),
+  path.resolve(process.cwd(), 'client/dist'),
+  path.resolve(process.cwd(), 'dist'),
+];
 
-if (fs.existsSync(clientDistPath) && fs.existsSync(indexFile)) {
-  app.use(express.static(clientDistPath));
+const resolvedClientDist = clientDistCandidates.find((candidate) =>
+  fs.existsSync(path.join(candidate, 'index.html'))
+);
+
+if (resolvedClientDist) {
+  const indexFile = path.join(resolvedClientDist, 'index.html');
+  // eslint-disable-next-line no-console
+  console.log(`Serving frontend from: ${resolvedClientDist}`);
+
+  app.use(express.static(resolvedClientDist));
   app.get(/^\/(?!api|health).*/, (req, res) => {
     res.sendFile(indexFile);
   });
+} else {
+  // eslint-disable-next-line no-console
+  console.warn(`Frontend dist not found. Checked: ${clientDistCandidates.join(', ')}`);
 }
 
 app.use('/api', (req, res) => {
