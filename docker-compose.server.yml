@@ -14,4 +14,21 @@ services:
       - "127.0.0.1:3001:3001"
     volumes:
       - ./server/data:/app/data
+    networks:
+      - default
+      - shared_proxy
     restart: unless-stopped
+
+  frontend:
+    image: nginx:1.27-alpine
+    container_name: ailab_frontend
+    volumes:
+      - ./client/dist:/usr/share/nginx/html:ro
+    networks:
+      - shared_proxy
+    restart: unless-stopped
+
+networks:
+  shared_proxy:
+    external: true
+    name: loan-rating_default

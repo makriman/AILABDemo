@@ -54,6 +54,12 @@ Prerequisite: create `server/.env` first (same variables shown above).
 
 ### Option 1: Docker Compose (recommended)
 
+Build frontend once before starting compose (needed for `ailab_frontend` static files):
+
+```bash
+cd client && npm install && npm run build && cd ..
+```
+
 ```bash
 docker compose -f docker-compose.server.yml up -d --build
 ```
@@ -94,7 +100,7 @@ docker run -d \
 
 The API will be reachable at `http://localhost:3001`.
 
-Note: `docker-compose.server.yml` binds `3001` to `127.0.0.1` for safer server deployments behind Nginx.
+Note: `docker-compose.server.yml` binds `3001` to `127.0.0.1` for safer server deployments behind Nginx and expects a shared proxy network named `loan-rating_default`.
 
 ## Scripts
 
