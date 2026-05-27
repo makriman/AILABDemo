@@ -1,159 +1,65 @@
-# JD Quiz App (Stateless Render MVP)
+# JD Quiz App
 
-A temporary job-description quiz tool built for a single Render Web Service.
+A stateless AI quiz generator that turns a job description into a five-question assessment flow.
 
-## Product Behavior
+Live: [https://ailab-demo.vercel.app](https://ailab-demo.vercel.app)
 
-- No accounts
-- No database
-- No saved quiz history
-- No persistent storage
-- Generate quiz -> answer 5 questions -> submit -> see feedback
-- Refresh/restart clears the in-memory session
+## Mission
 
-## Architecture
+Hiring and learning tools should make requirements easier to understand. This app converts a job description into a short quiz so candidates, learners, or reviewers can test comprehension without setting up accounts or databases.
 
-- `client/`: React + Vite
-- `server/`: Express API + Claude integration
-- Production: one Node service
-  - Express serves `/api/*`
-  - Express serves built Vite app from `client/dist`
-  - Same-origin frontend + backend
+## What This Repository Contains
 
-## Environment Variables
+A Render-friendly full-stack MVP with a React/Vite client and Express API. The server calls Claude, returns a five-question quiz, signs encrypted attempt tokens, and evaluates submitted answers without persistent storage.
 
-Set these in Render (and optionally local `.env`):
+## Highlights
 
-```env
-CLAUDE_API_KEY=sk-ant-...
-CLAUDE_MODEL=claude-sonnet-4-6
-QUIZ_STATE_SECRET=your-long-random-secret
-PORT=10000
-NODE_ENV=production
-TRUST_PROXY=true
-```
+- Paste a job description and generate a five-question quiz.
+- Answer questions client-side and submit with an encrypted attempt token.
+- Receive score and feedback with no accounts or database.
+- Same-origin production setup where Express serves both API and built client.
 
-Notes:
-- `QUIZ_STATE_SECRET` is required for encrypted attempt tokens.
-- `PORT` is provided automatically by Render.
+## Tech Stack
 
-## Local Development
+- React 18 and Vite
+- Express
+- Claude API
+- Vitest and integration tests
+- Render single-service deployment
 
-From repo root:
+## Getting Started
 
 ```bash
 npm install
 npm run dev
 ```
 
-This runs:
-- Express on `http://localhost:3001`
-- Vite on `http://localhost:5173` (proxying `/api` to Express)
-
-## Production Run (Local Smoke)
-
-From repo root:
+## Quality Checks
 
 ```bash
+npm test
 npm run build
-npm start
 ```
 
-Then verify:
-- `GET /health` -> `200`
-- `GET /` -> frontend app
-- quiz generate + submit flow works
+## Repository Notes
 
-## API Contract
+- Set CLAUDE_API_KEY and QUIZ_STATE_SECRET before running production-like flows.
+- The app is intentionally stateless; refreshes clear active quiz state.
 
-### `POST /api/quiz/generate`
+## Contributing
 
-Request:
+Contributions are welcome. The best contributions are specific, tested, and grounded in the product mission. Good places to help include documentation, accessibility, tests, bug reports, UI polish, data validation, and safer AI behavior.
 
-```json
-{
-  "jobDescription": "..."
-}
-```
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-Response:
+## Security
 
-```json
-{
-  "quiz": {
-    "jobTitle": "...",
-    "questions": [
-      {
-        "questionId": "q1",
-        "questionText": "...",
-        "options": [
-          { "label": "A", "text": "..." },
-          { "label": "B", "text": "..." },
-          { "label": "C", "text": "..." },
-          { "label": "D", "text": "..." }
-        ]
-      }
-    ]
-  },
-  "attemptToken": "opaque-encrypted-token",
-  "expiresAt": "2026-04-23T12:00:00.000Z"
-}
-```
+Please do not open public issues for secrets, auth bypasses, data exposure, provider key leaks, or abuse vectors. Follow [SECURITY.md](SECURITY.md).
 
-### `POST /api/quiz/submit`
+## Code of Conduct
 
-Request:
+This project follows [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). Be direct, kind, and useful.
 
-```json
-{
-  "attemptToken": "opaque-encrypted-token",
-  "answers": [
-    { "questionId": "q1", "selectedAnswer": "A" },
-    { "questionId": "q2", "selectedAnswer": "B" },
-    { "questionId": "q3", "selectedAnswer": "C" },
-    { "questionId": "q4", "selectedAnswer": "D" },
-    { "questionId": "q5", "selectedAnswer": "A" }
-  ]
-}
-```
+## License
 
-Response:
-
-```json
-{
-  "jobTitle": "...",
-  "score": 3,
-  "totalQuestions": 5,
-  "results": [
-    {
-      "questionId": "q1",
-      "questionText": "...",
-      "options": [
-        { "label": "A", "text": "..." },
-        { "label": "B", "text": "..." },
-        { "label": "C", "text": "..." },
-        { "label": "D", "text": "..." }
-      ],
-      "selectedAnswer": "A",
-      "correctAnswer": "B",
-      "isCorrect": false,
-      "explanation": "...",
-      "wrongExplanation": "..."
-    }
-  ],
-  "learningSummary": "..."
-}
-```
-
-## Render Deployment
-
-This repo includes `render.yaml` for a single Web Service blueprint.
-
-Dashboard equivalent settings:
-- Service type: Web Service
-- Runtime: Node
-- Build Command: `npm install && npm run build`
-- Start Command: `npm start`
-- Health Check Path: `/health`
-
-No DB, Redis, or persistent disk required.
+MIT. See [LICENSE](LICENSE).
