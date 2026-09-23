@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { buildSystemPrompt, buildUserPrompt } = require('../utils/prompt');
+const { isGenerationEnabled } = require('../utils/generationAuth');
 
 const DEFAULT_MODEL_CANDIDATES = [
   'claude-sonnet-4-6',
@@ -180,7 +181,15 @@ function getModelCandidates() {
   return [...new Set([...envCandidates, ...DEFAULT_MODEL_CANDIDATES])];
 }
 
+function assertGenerationEnabled() {
+  if (!isGenerationEnabled()) {
+    throw new ClaudeServiceError('Quiz generation is disabled.', 503, false);
+  }
+}
+
 async function callClaude(jobDescription, strictMode = false, model) {
+  assertGenerationEnabled();
+
   const apiKey = process.env.CLAUDE_API_KEY;
   if (!apiKey) {
     throw new ClaudeServiceError('CLAUDE_API_KEY is missing on the server.', 500, false);
@@ -244,6 +253,8 @@ async function callClaude(jobDescription, strictMode = false, model) {
 }
 
 async function generateQuizFromJobDescription(jobDescription) {
+  assertGenerationEnabled();
+
   let lastError;
   const modelCandidates = getModelCandidates();
 

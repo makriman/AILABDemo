@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const app = require('./src/app');
+const { isGenerationEnabled } = require('./src/utils/generationAuth');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT) || 10000;
@@ -19,6 +20,11 @@ function validateEnvironment() {
 
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+
+  if (!isGenerationEnabled()) {
+    // eslint-disable-next-line no-console
+    console.warn('QUIZ_GENERATION_SECRET is not set. Quiz generation is disabled.');
   }
 }
 

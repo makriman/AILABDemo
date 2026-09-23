@@ -1,4 +1,5 @@
 const { sanitizeString } = require('../utils/sanitizers');
+const { assertGenerationAuthorized } = require('../utils/generationAuth');
 const { generateQuizFromJobDescription, ClaudeServiceError } = require('./claude.service');
 const {
   createAttemptToken,
@@ -115,7 +116,9 @@ function scoreQuiz(quizPayload, answerMap) {
   };
 }
 
-async function generateQuiz(jobDescriptionInput) {
+async function generateQuiz(jobDescriptionInput, presentedSecret) {
+  assertGenerationAuthorized(presentedSecret);
+
   const jobDescription = normalizeJobDescription(jobDescriptionInput);
 
   let generatedQuiz;
@@ -124,6 +127,10 @@ async function generateQuiz(jobDescriptionInput) {
   } catch (error) {
     if (error instanceof ClaudeServiceError && error.statusCode === 429) {
       throw createHttpError('Please wait and try again shortly.', 429);
+    }
+
+    if (error instanceof ClaudeServiceError && error.statusCode === 503) {
+      throw createHttpError('Quiz generation is disabled.', 503);
     }
 
     throw createHttpError('Failed to generate quiz. Please try again.', 500);

@@ -30,6 +30,7 @@ If you are unsure whether something is security-sensitive, report it privately f
 
 - Never commit env files, provider keys, tokens, database dumps, or production user data.
 - Keep model provider keys and integration credentials outside client bundles.
+- `QUIZ_GENERATION_SECRET` stays on the server. Quiz generation does not call Claude unless that secret is configured and the caller presents it. Do not put a real value in `VITE_QUIZ_GENERATION_SECRET` for a public site.
 - Avoid logging personal data, private content, or raw secrets.
 
 ## Supported Versions

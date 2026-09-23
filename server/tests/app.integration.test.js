@@ -2,6 +2,8 @@ process.env.QUIZ_STATE_SECRET = 'test-secret-1234567890';
 
 const request = require('supertest');
 
+const GENERATION_SECRET = 'test-generation-secret';
+
 jest.mock('../src/services/quiz.service', () => ({
   generateQuiz: jest.fn(),
   submitQuiz: jest.fn(),
@@ -13,6 +15,11 @@ const app = require('../src/app');
 describe('API integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.QUIZ_GENERATION_SECRET = GENERATION_SECRET;
+  });
+
+  afterEach(() => {
+    delete process.env.QUIZ_GENERATION_SECRET;
   });
 
   test('GET /health returns 200', async () => {
@@ -45,6 +52,7 @@ describe('API integration', () => {
 
     const response = await request(app)
       .post('/api/quiz/generate')
+      .set('X-Quiz-Generation-Secret', GENERATION_SECRET)
       .send({
         jobDescription:
           'This is a sufficiently long job description for validation to pass and trigger generation.',
@@ -53,15 +61,76 @@ describe('API integration', () => {
     expect(response.status).toBe(200);
     expect(response.body.quiz.jobTitle).toBe('Engineer');
     expect(response.body.attemptToken).toBe('v1.token.parts');
+    expect(quizService.generateQuiz).toHaveBeenCalledWith(
+      expect.stringContaining('sufficiently long'),
+      GENERATION_SECRET
+    );
   });
 
   test('POST /api/quiz/generate with short JD returns 400', async () => {
     const response = await request(app)
       .post('/api/quiz/generate')
+      .set('X-Quiz-Generation-Secret', GENERATION_SECRET)
       .send({ jobDescription: 'too short' });
 
     expect(response.status).toBe(400);
     expect(response.body.error).toMatch(/at least 50 characters/i);
+  });
+
+  test('POST /api/quiz/generate is disabled when the server secret is unset', async () => {
+    delete process.env.QUIZ_GENERATION_SECRET;
+
+    const response = await request(app)
+      .post('/api/quiz/generate')
+      .send({
+        jobDescription:
+          'This is a sufficiently long job description for validation to pass and trigger generation.',
+      });
+
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe('Quiz generation is disabled.');
+    expect(quizService.generateQuiz).not.toHaveBeenCalled();
+  });
+
+  test('POST /api/quiz/generate rejects a short server secret', async () => {
+    process.env.QUIZ_GENERATION_SECRET = 'too-short';
+
+    const response = await request(app)
+      .post('/api/quiz/generate')
+      .set('X-Quiz-Generation-Secret', 'too-short')
+      .send({
+        jobDescription:
+          'This is a sufficiently long job description for validation to pass and trigger generation.',
+      });
+
+    expect(response.status).toBe(503);
+    expect(quizService.generateQuiz).not.toHaveBeenCalled();
+  });
+
+  test('POST /api/quiz/generate rejects callers that omit the secret', async () => {
+    const response = await request(app)
+      .post('/api/quiz/generate')
+      .send({
+        jobDescription:
+          'This is a sufficiently long job description for validation to pass and trigger generation.',
+      });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe('Unauthorized.');
+    expect(quizService.generateQuiz).not.toHaveBeenCalled();
+  });
+
+  test('POST /api/quiz/generate rejects callers that send the wrong secret', async () => {
+    const response = await request(app)
+      .post('/api/quiz/generate')
+      .set('X-Quiz-Generation-Secret', 'wrong-generation-secret')
+      .send({
+        jobDescription:
+          'This is a sufficiently long job description for validation to pass and trigger generation.',
+      });
+
+    expect(response.status).toBe(401);
+    expect(quizService.generateQuiz).not.toHaveBeenCalled();
   });
 
   test('POST /api/quiz/submit returns scored results', async () => {

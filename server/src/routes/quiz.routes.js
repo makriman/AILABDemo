@@ -6,10 +6,17 @@ const {
   quizGenerationLimiter,
   quizSubmissionLimiter,
 } = require('../middleware/rateLimit.middleware');
+const requireQuizGenerationAuth = require('../middleware/generationAuth.middleware');
 
 const router = express.Router();
 
-router.post('/generate', quizGenerationLimiter, validate(generateQuizSchema), quizController.generateQuiz);
+router.post(
+  '/generate',
+  requireQuizGenerationAuth,
+  quizGenerationLimiter,
+  validate(generateQuizSchema),
+  quizController.generateQuiz
+);
 router.post('/submit', quizSubmissionLimiter, validate(submitQuizSchema), quizController.submitQuiz);
 
 module.exports = router;

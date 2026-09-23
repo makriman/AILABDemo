@@ -6,7 +6,14 @@ const api = axios.create({
 });
 
 export async function generateQuiz(jobDescription) {
-  const { data } = await api.post('/quiz/generate', { jobDescription }, { timeout: 70000 });
+  const headers = {};
+  const generationSecret = import.meta.env.VITE_QUIZ_GENERATION_SECRET;
+
+  if (typeof generationSecret === 'string' && generationSecret.trim()) {
+    headers['X-Quiz-Generation-Secret'] = generationSecret.trim();
+  }
+
+  const { data } = await api.post('/quiz/generate', { jobDescription }, { timeout: 70000, headers });
   return data;
 }
 
