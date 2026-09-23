@@ -1,4 +1,4 @@
-process.env.QUIZ_STATE_SECRET = 'test-secret-1234567890';
+process.env.QUIZ_STATE_SECRET = 'test-only-quiz-state-secret-0123456789';
 
 const request = require('supertest');
 

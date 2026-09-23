@@ -29,6 +29,7 @@ If you are unsure whether something is security-sensitive, report it privately f
 ## Secrets and Data
 
 - Never commit env files, provider keys, tokens, database dumps, or production user data.
+- QUIZ_STATE_SECRET encrypts attempt tokens that contain answer keys. Use at least 32 unique random characters, and do not deploy the documented placeholder.
 - Keep model provider keys and integration credentials outside client bundles.
 - Avoid logging personal data, private content, or raw secrets.
 
