@@ -6,26 +6,40 @@ const morgan = require('morgan');
 
 const quizRoutes = require('./routes/quiz.routes');
 const { globalLimiter } = require('./middleware/rateLimit.middleware');
+const originPolicy = require('./middleware/originPolicy.middleware');
+const { redactSecrets } = require('./utils/redactSecrets');
+const { decideTrustProxy } = require('./utils/trustProxy');
 
 const app = express();
 
-const trustProxyConfig = process.env.TRUST_PROXY;
+const trustProxyDecision = decideTrustProxy(process.env.TRUST_PROXY, process.env.NODE_ENV);
+const trustProxy = trustProxyDecision.value;
 
-if (typeof trustProxyConfig === 'string') {
-  if (trustProxyConfig.toLowerCase() === 'true') {
-    app.set('trust proxy', 1);
-  } else if (trustProxyConfig.toLowerCase() === 'false') {
-    app.set('trust proxy', false);
-  } else {
-    app.set('trust proxy', trustProxyConfig);
-  }
-} else if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
+if (trustProxyDecision.ignored) {
+  // eslint-disable-next-line no-console
+  console.warn('Ignoring unsupported TRUST_PROXY value; using the safe default.');
+}
+
+if (trustProxy !== false) {
+  app.set('trust proxy', trustProxy);
 }
 
 app.use(helmet());
+app.use(originPolicy);
 app.use(globalLimiter);
 app.use(express.json({ limit: '1mb' }));
+app.use('/api', (req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
+    return next();
+  }
+
+  const contentType = (req.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (contentType !== 'application/json') {
+    return res.status(415).json({ error: 'Content-Type must be application/json.' });
+  }
+
+  return next();
+});
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 app.get('/health', (req, res) => {
@@ -73,6 +87,9 @@ app.use((error, req, res, next) => {
   if (res.headersSent) {
     return next(error);
   }
+
+  // eslint-disable-next-line no-console
+  console.error('Unhandled error:', redactSecrets(error && error.message ? error.message : 'unknown'));
 
   return res.status(500).json({
     error: 'Internal server error.',

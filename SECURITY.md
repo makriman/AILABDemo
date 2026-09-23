@@ -31,6 +31,9 @@ If you are unsure whether something is security-sensitive, report it privately f
 - Never commit env files, provider keys, tokens, database dumps, or production user data.
 - Keep model provider keys and integration credentials outside client bundles.
 - Avoid logging personal data, private content, or raw secrets.
+- `QUIZ_STATE_SECRET` encrypts answer keys inside attempt tokens. Use a unique random value of at least 32 characters. Example placeholders are rejected. Production reads secrets from the host environment, not from a dotenv file.
+- The API and built client are same-origin. Other browser origins are rejected unless `ALLOWED_ORIGINS` lists that exact `http` or `https` origin. `*` is ignored. The API does not enable credentialed cross-origin reads.
+- Attempt tokens are accepted only for this app's quiz submit audience, and only inside their short lifetime. Server errors do not return secret values or secret names to the browser.
 
 ## Supported Versions
 

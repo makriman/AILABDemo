@@ -224,7 +224,9 @@ async function callClaude(jobDescription, strictMode = false, model) {
     }
 
     if (error.response?.status === 401 || error.response?.status === 403) {
-      throw new ClaudeServiceError('Claude API authentication failed.', 500, false);
+      const authError = new ClaudeServiceError('Claude API authentication failed.', 500, false);
+      authError.code = 'AUTH_FAILED';
+      throw authError;
     }
 
     if (error.code === 'ECONNABORTED') {
@@ -257,7 +259,10 @@ async function generateQuizFromJobDescription(jobDescription) {
         const json = parseJsonFromText(text);
         return validateAndNormalizeQuizPayload(json);
       } catch (error) {
-        if (error instanceof ClaudeServiceError && error.statusCode === 429) {
+        if (
+          error instanceof ClaudeServiceError &&
+          (error.statusCode === 429 || error.code === 'AUTH_FAILED')
+        ) {
           throw error;
         }
 
