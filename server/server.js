@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const app = require('./src/app');
+const { assertQuizStateSecretConfigured } = require('./src/utils/quizStateSecret');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const PORT = Number(process.env.PORT) || 10000;
@@ -13,13 +14,13 @@ function validateEnvironment() {
     required.push('CLAUDE_API_KEY');
   }
 
-  required.push('QUIZ_STATE_SECRET');
-
   const missing = required.filter((name) => !process.env[name]);
 
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
+
+  assertQuizStateSecretConfigured();
 }
 
 function startServer() {

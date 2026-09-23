@@ -6,7 +6,7 @@ const {
 
 describe('quizSession.service', () => {
   beforeEach(() => {
-    process.env.QUIZ_STATE_SECRET = 'test-secret-1234567890';
+    process.env.QUIZ_STATE_SECRET = 'test-only-quiz-state-secret-0123456789';
   });
 
   test('encrypts and decrypts a payload', () => {
@@ -40,6 +40,40 @@ describe('quizSession.service', () => {
 
     expect(() => decryptAttemptToken(tamperedToken)).toThrow(QuizSessionError);
     expect(() => decryptAttemptToken(tamperedToken)).toThrow('Invalid token.');
+  });
+
+  test('rejects a short or placeholder QUIZ_STATE_SECRET', () => {
+    process.env.QUIZ_STATE_SECRET = 'short-secret';
+
+    expect(() =>
+      createAttemptToken({
+        jobTitle: 'Engineer',
+        questions: [],
+        learningSummary: 'Summary',
+      })
+    ).toThrow(QuizSessionError);
+
+    try {
+      createAttemptToken({
+        jobTitle: 'Engineer',
+        questions: [],
+        learningSummary: 'Summary',
+      });
+    } catch (error) {
+      expect(error.statusCode).toBe(500);
+      expect(error.message).toBe('QUIZ_STATE_SECRET is not configured.');
+      expect(error.message).not.toContain('short-secret');
+    }
+
+    process.env.QUIZ_STATE_SECRET = '  replace-with-a-long-random-secret  ';
+
+    expect(() =>
+      createAttemptToken({
+        jobTitle: 'Engineer',
+        questions: [],
+        learningSummary: 'Summary',
+      })
+    ).toThrow('QUIZ_STATE_SECRET is not configured.');
   });
 
   test('rejects expired token', () => {

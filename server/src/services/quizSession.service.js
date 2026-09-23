@@ -1,4 +1,8 @@
 const crypto = require('crypto');
+const {
+  assertQuizStateSecretConfigured,
+  readQuizStateSecret,
+} = require('../utils/quizStateSecret');
 
 const TOKEN_VERSION = 'v1';
 const TOKEN_TTL_MS = 30 * 60 * 1000;
@@ -13,13 +17,13 @@ class QuizSessionError extends Error {
 }
 
 function getSecret() {
-  const secret = process.env.QUIZ_STATE_SECRET;
-
-  if (!secret || !secret.trim()) {
+  try {
+    assertQuizStateSecretConfigured();
+  } catch {
     throw new QuizSessionError('QUIZ_STATE_SECRET is not configured.', 500);
   }
 
-  return secret;
+  return readQuizStateSecret();
 }
 
 function deriveKey() {

@@ -43,7 +43,7 @@ npm run build
 
 ## Repository Notes
 
-- Set CLAUDE_API_KEY and QUIZ_STATE_SECRET before running production-like flows.
+- Set CLAUDE_API_KEY and a unique QUIZ_STATE_SECRET of at least 32 characters before running production-like flows. The sample placeholder is rejected.
 - The app is intentionally stateless; refreshes clear active quiz state.
 
 ## Contributing
