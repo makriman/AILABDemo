@@ -1,4 +1,4 @@
-process.env.QUIZ_STATE_SECRET = 'test-secret-1234567890';
+process.env.QUIZ_STATE_SECRET = 'test-quiz-state-secret-0123456789abcd';
 
 const request = require('supertest');
 
@@ -130,5 +130,36 @@ describe('API integration', () => {
       });
 
     expect(response.status).toBe(400);
+  });
+
+  test('POST /api/quiz/submit hides server error details', async () => {
+    const error = new Error(
+      'QUIZ_STATE_SECRET test-quiz-state-secret-0123456789abcd could not encrypt'
+    );
+    error.statusCode = 500;
+    quizService.submitQuiz.mockRejectedValue(error);
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const response = await request(app)
+      .post('/api/quiz/submit')
+      .send({
+        attemptToken: 'v1.token.parts',
+        answers: [
+          { questionId: 'q1', selectedAnswer: 'A' },
+          { questionId: 'q2', selectedAnswer: 'B' },
+          { questionId: 'q3', selectedAnswer: 'C' },
+          { questionId: 'q4', selectedAnswer: 'D' },
+          { questionId: 'q5', selectedAnswer: 'A' },
+        ],
+      });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toEqual({ error: 'Internal server error.' });
+    expect(JSON.stringify(response.body)).not.toContain('QUIZ_STATE_SECRET');
+    expect(JSON.stringify(response.body)).not.toContain('test-quiz-state-secret-0123456789abcd');
+
+    const logged = errorSpy.mock.calls.map((call) => JSON.stringify(call)).join('\n');
+    expect(logged).not.toContain('test-quiz-state-secret-0123456789abcd');
+    errorSpy.mockRestore();
   });
 });

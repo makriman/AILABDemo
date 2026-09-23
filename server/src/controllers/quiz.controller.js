@@ -1,4 +1,5 @@
 const quizService = require('../services/quiz.service');
+const { redactSecrets } = require('../utils/redactSecrets');
 
 function handleError(res, error) {
   const status = error.statusCode || 500;
@@ -6,8 +7,12 @@ function handleError(res, error) {
   if (status >= 500) {
     // eslint-disable-next-line no-console
     console.error('Quiz controller error:', {
-      message: error.message,
+      message: redactSecrets(error.message),
       status,
+    });
+
+    return res.status(500).json({
+      error: 'Internal server error.',
     });
   }
 

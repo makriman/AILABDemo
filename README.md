@@ -43,7 +43,8 @@ npm run build
 
 ## Repository Notes
 
-- Set CLAUDE_API_KEY and QUIZ_STATE_SECRET before running production-like flows.
+- Set CLAUDE_API_KEY and QUIZ_STATE_SECRET in the host environment before running production-like flows. QUIZ_STATE_SECRET must be a unique random value of at least 32 characters. Do not reuse the sample placeholder, and do not commit `.env` files. Production does not load a dotenv file.
+- Browser API calls are same-origin. A request that sends another site's Origin is rejected. ALLOWED_ORIGINS may add exact http or https origins. `*` is ignored, and credentialed cross-origin reads are not enabled.
 - The app is intentionally stateless; refreshes clear active quiz state.
 
 ## Contributing
