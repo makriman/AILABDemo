@@ -44,6 +44,8 @@ npm run build
 ## Repository Notes
 
 - Set CLAUDE_API_KEY and QUIZ_STATE_SECRET before running production-like flows.
+- Quiz generation is off until `QUIZ_GENERATION_SECRET` is set to a random string of at least 16 characters. Callers must send that value in the `X-Quiz-Generation-Secret` header. An empty or short value never calls Claude.
+- A private build can set `VITE_QUIZ_GENERATION_SECRET` so the client sends the header. That value is embedded in the public JavaScript bundle, so leave it unset on a public deploy.
 - The app is intentionally stateless; refreshes clear active quiz state.
 
 ## Contributing

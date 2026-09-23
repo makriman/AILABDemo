@@ -18,7 +18,10 @@ function handleError(res, error) {
 
 async function generateQuiz(req, res) {
   try {
-    const response = await quizService.generateQuiz(req.body.jobDescription);
+    const response = await quizService.generateQuiz(
+      req.body.jobDescription,
+      req.get('x-quiz-generation-secret')
+    );
     return res.status(200).json(response);
   } catch (error) {
     return handleError(res, error);
